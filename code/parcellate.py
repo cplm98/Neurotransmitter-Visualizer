@@ -11,10 +11,8 @@ scale = 'scale100'
 
 schaefer = fetch_atlas_schaefer_2018(n_rois=100)
 
-path = "C:/Users/justi/OneDrive - McGill University/MisicLab/proj_receptors/\
-github/hansen_receptors/data/PET_nifti_images/"
-outpath = "C:/Users/justi/OneDrive - McGill University/MisicLab/proj_receptors/\
-github/hansen_receptors/data/PET_parcellated/"+scale+"/"
+path = "/Users/connormoore/Documents/CS_Projects/Neurotransmitters/hansen_receptors/data/PET_nifti_images/"
+outpath = "/Users/connormoore/Documents/CS_Projects/Neurotransmitters/hansen_receptors/data/PET_parcellated/"+scale+"/"
 
 receptors_nii = [path+'5HT1a_way_hc36_savli.nii',
                  path+'5HT1a_cumi_hc8_beliveau.nii',
@@ -50,7 +48,7 @@ receptors_nii = [path+'5HT1a_way_hc36_savli.nii',
                  path+'NAT_MRB_hc77_ding.nii.gz',
                  path+'NAT_MRB_hc10_hesse.nii',
                  path+'NMDA_ge179_hc29_galovic.nii.gz',
-                 path+'VAChT_feobv_hc3_spreng.nii',
+                #  path+'VAChT_feobv_hc3_spreng.nii', No corresponding file
                  path+'VAChT_feobv_hc4_tuominen.nii',
                  path+'VAChT_feobv_hc5_bedard_sum.nii',
                  path+'VAChT_feobv_hc18_aghourian_sum.nii']
