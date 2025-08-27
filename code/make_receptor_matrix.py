@@ -96,6 +96,9 @@ np.savetxt(path+'results/receptor_data_'+scale+'.csv', receptor_data, delimiter=
 plot receptor data
 """
 
+### TO DO ###
+# Update color maps to use the colormaps csv
+
 # colourmaps
 cmap = np.genfromtxt(path+'data/colourmap.csv', delimiter=',')
 cmap_div = ListedColormap(cmap)
@@ -103,31 +106,6 @@ cmap_div = ListedColormap(cmap)
 # Ensure the output directory exists
 output_dir = path + 'figures/schaefer100/'
 os.makedirs(output_dir, exist_ok=True)
-
-# Plot each receptor map using Plotly
-# if scale == 'scale100':
-#     annot = datasets.fetch_schaefer2018('fsaverage')['100Parcels7Networks']
-#     for k in range(len(receptor_names)):
-#         # Create a 3D surface plot for the receptor data
-#         fig = go.Figure(data=go.Surface(
-#             z=receptor_data[:, k].reshape((10, 10)),  # Example reshaping, adjust as needed
-#             colorscale='Plasma',
-#             colorbar=dict(title=receptor_names[k])
-#         ))
-
-#         # Update layout for better visualization
-#         fig.update_layout(
-#             title=f"Surface Receptor Map: {receptor_names[k]}",
-#             scene=dict(
-#                 xaxis_title="X Axis",
-#                 yaxis_title="Y Axis",
-#                 zaxis_title="Density"
-#             )
-#         )
-
-#         # Save the plot as an HTML file
-#         fig.write_html(path + f'figures/schaefer100/surface_receptor_{receptor_names[k]}.html')
-
 
 # Path to your whole-brain .nii file
 brain_nii_path = path + 'data/PET_nifti_images/5HT1a_cumi_hc8_beliveau.nii'
@@ -138,7 +116,6 @@ brain_img = nib.load(brain_nii_path)
 # Fetch fsaverage surface (or use your own surface file)
 fsaverage = fetch_surf_fsaverage()
 
-# Project the volumetric data onto the surface
 # Use the pial surface for both hemispheres
 lh_surface = fsaverage['pial_left']
 rh_surface = fsaverage['pial_right']
@@ -151,10 +128,6 @@ rh_mesh = load_surf_mesh(rh_surface)  # Right hemisphere
 lh_coords = lh_mesh[0]  # Left hemisphere vertex coordinates
 rh_coords = rh_mesh[0]  # Right hemisphere vertex coordinates
 
-print(type(lh_coords), type(rh_coords))
-print(lh_coords.shape if isinstance(lh_coords, np.ndarray) else "lh_coords is not an array")
-print(rh_coords.shape if isinstance(rh_coords, np.ndarray) else "rh_coords is not an array")
-
 # Combine vertex coordinates
 vertices = np.vstack((lh_coords, rh_coords))
 
@@ -165,49 +138,6 @@ rh_faces = rh_mesh[1] + len(lh_coords)  # Adjust indices for right hemisphere
 # Combine faces
 faces = np.vstack((lh_faces, rh_faces))
 
-# Project the volumetric data onto the surface vertices
-lh_data = vol_to_surf(brain_img, lh_surface)  # Left hemisphere data
-rh_data = vol_to_surf(brain_img, rh_surface)  # Right hemisphere data
-
-# Combine receptor data
-vertex_colors = np.concatenate((lh_data, rh_data))
-
-# Create the Plotly Mesh3d object
-brain_mesh = go.Mesh3d(
-    x=vertices[:, 0],
-    y=vertices[:, 1],
-    z=vertices[:, 2],
-    i=faces[:, 0],
-    j=faces[:, 1],
-    k=faces[:, 2],
-    intensity=vertex_colors,  # Color the vertices based on receptor data
-    colorscale='Viridis',  # Choose a colorscale
-    colorbar=dict(title='Receptor Density'),
-    showscale=True,
-    opacity=0.8
-)
-
-# Create the figure
-fig = go.Figure(data=[brain_mesh])
-
-# Update layout for better visualization
-fig.update_layout(
-    title="Whole-Brain Overlay with Receptor Densities",
-    scene=dict(
-        xaxis_title="X Axis",
-        yaxis_title="Y Axis",
-        zaxis_title="Z Axis",
-        aspectmode="data"
-    )
-)
-
-# Save the plot as an HTML file
-fig.write_html(path + 'figures/schaefer100/whole_brain_overlay.html')
-
-
-# Fetch the Schaefer parcellation atlas
-schaefer = fetch_atlas_schaefer_2018(n_rois=100, yeo_networks=7, resolution_mm=1)
-
 # Project the Schaefer parcellation NIfTI file onto the surface
 annot_lh = vol_to_surf(schaefer.maps, lh_surface)  # Left hemisphere labels
 annot_rh = vol_to_surf(schaefer.maps, rh_surface)  # Right hemisphere labels
@@ -215,7 +145,17 @@ annot_rh = vol_to_surf(schaefer.maps, rh_surface)  # Right hemisphere labels
 # Combine left and right hemisphere labels
 annot = np.concatenate((annot_lh, annot_rh))
 
-# Loop through each receptor and create a visualization
+# Define camera views
+from plotly.subplots import make_subplots
+
+# Define cross-sectional views with axis ranges for cuts
+cross_sections = {
+    "frontal": dict(xaxis=dict(range=[-50, 50]), yaxis=dict(range=[-50, 50]), zaxis=dict(range=[-50, 50])),
+    "sagittal": dict(xaxis=dict(range=[-50, 50]), yaxis=dict(range=[-50, 50]), zaxis=dict(range=[-50, 50])),
+    "transverse": dict(xaxis=dict(range=[-50, 50]), yaxis=dict(range=[-50, 50]), zaxis=dict(range=[-50, 50]))
+}
+
+# Loop through each receptor and create a combined visualization
 for k in range(len(receptor_names)):
     # Map the receptor density data to the vertices based on the parcellation
     vertex_colors = np.zeros(len(vertices))  # Initialize vertex colors
@@ -235,22 +175,38 @@ for k in range(len(receptor_names)):
         colorscale='Viridis',  # Choose a colorscale
         colorbar=dict(title=f'{receptor_names[k]} Density'),
         showscale=True,
-        opacity=0.8
+        opacity=1
     )
 
-    # Create the figure
-    fig = go.Figure(data=[brain_mesh])
+    # Create a subplot figure for all views
+    fig = make_subplots(
+        rows=1, cols=3,
+        subplot_titles=["Frontal View", "Sagittal View", "Transverse View"],
+        specs=[[{'type': 'scene'}, {'type': 'scene'}, {'type': 'scene'}]]
+    )
 
-    # Update layout for better visualization
-    fig.update_layout(
-        title=f"Whole-Brain Overlay: {receptor_names[k]}",
-        scene=dict(
-            xaxis_title="X Axis",
-            yaxis_title="Y Axis",
-            zaxis_title="Z Axis",
-            aspectmode="data"
+    # Add the brain mesh for each view
+    for i, (view_name, axis_ranges) in enumerate(cross_sections.items(), start=1):
+        fig.add_trace(brain_mesh, row=1, col=i)
+        fig.update_scenes(
+            dict(
+                xaxis_title="X Axis",
+                yaxis_title="Y Axis",
+                zaxis_title="Z Axis",
+                aspectmode="data",
+                xaxis=axis_ranges["xaxis"],
+                yaxis=axis_ranges["yaxis"],
+                zaxis=axis_ranges["zaxis"]
+            ),
+            row=1, col=i
         )
+
+    # Update the layout for the entire figure
+    fig.update_layout(
+        title=f"{receptor_names[k]} - Cross-Sectional Views",
+        height=800,  # Adjust height for better visualization
+        width=1200   # Adjust width for better visualization
     )
 
     # Save the plot as an HTML file
-    fig.write_html(path + f'figures/schaefer100/surface_receptor_{receptor_names[k]}.html')
+    fig.write_html(path + f'figures/schaefer100/surface_receptor_{receptor_names[k]}_cross_sections.html')
