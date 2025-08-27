@@ -107,5 +107,3 @@ if scale == 'scale100':
                                         views=['lat', 'med'],
                                         data_kws={'representation': "wireframe"})
         brain.save_image(path+'figures/schaefer100/surface_receptor_'+receptor_names[k]+'.png')
-
-Choose output directory for HTML (use the repo’s results/ or a custom folder)
