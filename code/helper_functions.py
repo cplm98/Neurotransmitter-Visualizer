@@ -1,6 +1,3 @@
-# surf_atlas_annotation_demo.py
-# Browser-based demo of (1) surface, (2) atlas regions, (3) parcel values mapped to surface.
-# Works with netneurotools 0.2.5 (legacy API). No Qt/Mayavi needed.
 
 import os
 import glob
@@ -153,88 +150,6 @@ def schaefer_vector_to_vertices(parcel_vals, n_rois=100, yeo_networks=7, mesh='f
     rh_tex = paint(rh_labels, code_to_name_r)
     return fsavg, lh_labels, rh_labels, lh_tex, rh_tex
 
-
-# ---------------- demo config ----------------
-
-mesh = 'fsaverage6' # use fsaverage5 for fast, fsaverage6 for balance between detail and speed
-image_type = "anatomical" # or inflated
-n_rois = 100
-yeo_networks = 7
-outdir = "results/browser_demo"
-os.makedirs(outdir, exist_ok=True)
-
-# Load free surfer average mesh
-fsavg = nl_datasets.fetch_surf_fsaverage(mesh=mesh)
-
-#inflated vs pial
-if image_type == 'anatomical': # pial is the anatomical mesh
-    surf_left = fsavg.pial_left
-    surf_right = fsavg.pial_right
-elif image_type == "inflated": # inflated is more easy to visualize
-    surf_left = fsavg.infl_left
-    surf_right = fsavg.infl_right
-else:
-    print("invalid image type - please set correctly")
-    exit()
-
-# ---------------- (1) surface only ----------------
-# Use 'Greys' colormap with darkness=None so sulcal shading is visible
-view_left = nl_plotting.view_surf(
-    surf_left, bg_map=fsavg.sulc_left,
-    colorbar=False, cmap='Greys', darkness=None
-)
-view_right = nl_plotting.view_surf(
-    surf_right, bg_map=fsavg.sulc_right,
-    colorbar=False, cmap='Greys', darkness=None
-)
-view_left.save_as_html(os.path.join(outdir, f"01_surface_left_{mesh}.html"))
-view_right.save_as_html(os.path.join(outdir, f"01_surface_right_{mesh}.html"))
-
-
-# ---------------- (2) atlas regions colored ----------------
-
-ann = _fetch_schaefer_annots(mesh=mesh, n_rois=n_rois, yeo_networks=yeo_networks)
-lh_labels, _, _ = nib.freesurfer.read_annot(ann['lh'])
-rh_labels, _, _ = nib.freesurfer.read_annot(ann['rh'])
-
-# use label codes directly just to visualize region boundaries (categorical colormap)
-view_left = nl_plotting.view_surf(surf_left,  lh_labels.astype(float),
-                                  bg_map=fsavg.sulc_left,  colorbar=False, cmap='tab20')
-view_right = nl_plotting.view_surf(surf_right, rh_labels.astype(float),
-                                   bg_map=fsavg.sulc_right, colorbar=False, cmap='tab20')
-view_left.save_as_html(os.path.join(outdir, f"02_atlas_left_{mesh}.html"))
-view_right.save_as_html(os.path.join(outdir, f"02_atlas_right_{mesh}.html"))
-
-
-# ---------------- (3) annotation → values (parcel vector mapped) ----------------
-
-# Example parcel vector — replace with your real data, e.g. receptor_data[:, k]
-rng = np.random.default_rng(42)
-parcel_vector = rng.normal(size=n_rois)
-
-fsavg, _, _, lh_tex, rh_tex = schaefer_vector_to_vertices(parcel_vector, n_rois, yeo_networks, mesh)
-
-# Surface-only (clean gray cortical relief)
-view_left = nl_plotting.view_surf(
-    surf_left,
-    bg_map=fsavg.sulc_left,
-    colorbar=False,
-    darkness=None,        # recommended; avoids over-darkening
-)
-view_right = nl_plotting.view_surf(
-    surf_right,
-    bg_map=fsavg.sulc_right,
-    colorbar=False,
-    darkness=None,
-)
-
-view_left.save_as_html(os.path.join(outdir, f"03_values_left_{mesh}.html"))
-view_right.save_as_html(os.path.join(outdir, f"03_values_right_{mesh}.html"))
-
-print(f"Saved HTML to: {os.path.abspath(outdir)}")
-
-# ---------------- helper to stitch left/right into one HTML ----------------
-
 def save_side_by_side_iframe(left_html, right_html, out_html, title="Brain View", height="720px"):
     tpl = f"""<!doctype html>
 <html>
@@ -257,31 +172,3 @@ def save_side_by_side_iframe(left_html, right_html, out_html, title="Brain View"
     with open(out_html, "w") as f:
         f.write(tpl)
     print(f"[side-by-side] wrote {out_html}")
-
-
-# ---------------- after each pair of saves, also stitch ----------------
-
-# surface
-save_side_by_side_iframe(
-    os.path.join(outdir, f"01_surface_left_{mesh}.html"),
-    os.path.join(outdir, f"01_surface_right_{mesh}.html"),
-    os.path.join(outdir, f"01_surface_side_by_side_{mesh}.html"),
-    title="Surface only", height="720px"
-)
-
-# atlas
-save_side_by_side_iframe(
-    os.path.join(outdir, f"02_atlas_left_{mesh}.html"),
-    os.path.join(outdir, f"02_atlas_right_{mesh}.html"),
-    os.path.join(outdir, f"02_atlas_side_by_side_{mesh}.html"),
-    title="Atlas regions", height="720px"
-)
-
-# values
-save_side_by_side_iframe(
-    os.path.join(outdir, f"03_values_left_{mesh}.html"),
-    os.path.join(outdir, f"03_values_right_{mesh}.html"),
-    os.path.join(outdir, f"03_values_side_by_side_{mesh}.html"),
-    title="Parcel values", height="720px"
-)
-

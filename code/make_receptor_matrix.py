@@ -4,15 +4,10 @@ Concatenate parcellated PET images into region x receptor matrix of densities.
 """
 
 import numpy as np
-import os
 from netneurotools import datasets, plotting
 from matplotlib.colors import ListedColormap
 from scipy.stats import zscore
 from nilearn.datasets import fetch_atlas_schaefer_2018
-import plotly.graph_objects as go
-from nilearn.surface import load_surf_mesh, vol_to_surf
-from nilearn.datasets import fetch_surf_fsaverage
-import nibabel as nib
 
 path = "/Users/connormoore/Documents/CS_Projects/Neurotransmitters/hansen_receptors/"
 
@@ -57,9 +52,7 @@ receptors_csv = [path+'data/PET_parcellated/'+scale+'/5HT1a_way_hc36_savli.csv',
                  path+'data/PET_parcellated/'+scale+'/VAChT_feobv_hc18_aghourian_sum.csv']
 
 # combine all the receptors (including repeats)
-print("len(nnodes): ", nnodes)
 r = np.zeros([nnodes, len(receptors_csv)])
-print("shape(r): ", r.shape)
 for i in range(len(receptors_csv)):
     r[:, i] = np.genfromtxt(receptors_csv[i], delimiter=',')
 
@@ -85,8 +78,8 @@ receptor_data[:, 9] = (zscore(r[:, 10])*37 + zscore(r[:, 11])*55) / (37+55)
 # weighted average of mGluR5 ABP688
 receptor_data[:, 14] = (zscore(r[:, 16])*22 + zscore(r[:, 17])*28 + zscore(r[:, 18])*73) / (22+28+73)
 
-# weighted average of VAChT FEOBV - had to update indexes because of missing files
-receptor_data[:, 18] = (zscore(r[:, 21])*3 + zscore(r[:, 22])*4 + zscore(r[:, 23]) + zscore(r[:, 24])) / \
+# weighted average of VAChT FEOBV
+receptor_data[:, 18] = (zscore(r[:, 22])*3 + zscore(r[:, 23])*4 + zscore(r[:, 24]) + zscore(r[:, 25])) / \
                        (3+4+5+18)
 
 np.savetxt(path+'results/receptor_data_'+scale+'.csv', receptor_data, delimiter=',')
@@ -96,117 +89,18 @@ np.savetxt(path+'results/receptor_data_'+scale+'.csv', receptor_data, delimiter=
 plot receptor data
 """
 
-### TO DO ###
-# Update color maps to use the colormaps csv
-
 # colourmaps
 cmap = np.genfromtxt(path+'data/colourmap.csv', delimiter=',')
 cmap_div = ListedColormap(cmap)
 
-# Ensure the output directory exists
-output_dir = path + 'figures/schaefer100/'
-os.makedirs(output_dir, exist_ok=True)
-
-# Path to your whole-brain .nii file
-brain_nii_path = path + 'data/PET_nifti_images/5HT1a_cumi_hc8_beliveau.nii'
-
-# Load the whole-brain .nii file
-brain_img = nib.load(brain_nii_path)
-
-# Fetch fsaverage surface (or use your own surface file)
-fsaverage = fetch_surf_fsaverage()
-
-# Use the pial surface for both hemispheres
-lh_surface = fsaverage['pial_left']
-rh_surface = fsaverage['pial_right']
-
-# Load the surface meshes for both hemispheres
-lh_mesh = load_surf_mesh(lh_surface)  # Left hemisphere
-rh_mesh = load_surf_mesh(rh_surface)  # Right hemisphere
-
-# Extract vertex coordinates
-lh_coords = lh_mesh[0]  # Left hemisphere vertex coordinates
-rh_coords = rh_mesh[0]  # Right hemisphere vertex coordinates
-
-# Combine vertex coordinates
-vertices = np.vstack((lh_coords, rh_coords))
-
-# Extract faces (triangles) directly from the loaded meshes
-lh_faces = lh_mesh[1]  # Left hemisphere faces
-rh_faces = rh_mesh[1] + len(lh_coords)  # Adjust indices for right hemisphere
-
-# Combine faces
-faces = np.vstack((lh_faces, rh_faces))
-
-# Project the Schaefer parcellation NIfTI file onto the surface
-annot_lh = vol_to_surf(schaefer.maps, lh_surface)  # Left hemisphere labels
-annot_rh = vol_to_surf(schaefer.maps, rh_surface)  # Right hemisphere labels
-
-# Combine left and right hemisphere labels
-annot = np.concatenate((annot_lh, annot_rh))
-
-# Define camera views
-from plotly.subplots import make_subplots
-
-# Define cross-sectional views with axis ranges for cuts
-cross_sections = {
-    "frontal": dict(xaxis=dict(range=[-50, 50]), yaxis=dict(range=[-50, 50]), zaxis=dict(range=[-50, 50])),
-    "sagittal": dict(xaxis=dict(range=[-50, 50]), yaxis=dict(range=[-50, 50]), zaxis=dict(range=[-50, 50])),
-    "transverse": dict(xaxis=dict(range=[-50, 50]), yaxis=dict(range=[-50, 50]), zaxis=dict(range=[-50, 50]))
-}
-
-# Loop through each receptor and create a combined visualization
-for k in range(len(receptor_names)):
-    # Map the receptor density data to the vertices based on the parcellation
-    vertex_colors = np.zeros(len(vertices))  # Initialize vertex colors
-    for region_idx in range(len(labels)):
-        # Assign the receptor density for the current region to the corresponding vertices
-        vertex_colors[annot == region_idx + 1] = receptor_data[region_idx, k]  # +1 because labels are 1-based
-
-    # Create the Plotly Mesh3d object
-    brain_mesh = go.Mesh3d(
-        x=vertices[:, 0],
-        y=vertices[:, 1],
-        z=vertices[:, 2],
-        i=faces[:, 0],
-        j=faces[:, 1],
-        k=faces[:, 2],
-        intensity=vertex_colors,  # Color the vertices based on receptor data
-        colorscale='Viridis',  # Choose a colorscale
-        colorbar=dict(title=f'{receptor_names[k]} Density'),
-        showscale=True,
-        opacity=1
-    )
-
-    # Create a subplot figure for all views
-    fig = make_subplots(
-        rows=1, cols=3,
-        subplot_titles=["Frontal View", "Sagittal View", "Transverse View"],
-        specs=[[{'type': 'scene'}, {'type': 'scene'}, {'type': 'scene'}]]
-    )
-
-    # Add the brain mesh for each view
-    for i, (view_name, axis_ranges) in enumerate(cross_sections.items(), start=1):
-        fig.add_trace(brain_mesh, row=1, col=i)
-        fig.update_scenes(
-            dict(
-                xaxis_title="X Axis",
-                yaxis_title="Y Axis",
-                zaxis_title="Z Axis",
-                aspectmode="data",
-                xaxis=axis_ranges["xaxis"],
-                yaxis=axis_ranges["yaxis"],
-                zaxis=axis_ranges["zaxis"]
-            ),
-            row=1, col=i
-        )
-
-    # Update the layout for the entire figure
-    fig.update_layout(
-        title=f"{receptor_names[k]} - Cross-Sectional Views",
-        height=800,  # Adjust height for better visualization
-        width=1200   # Adjust width for better visualization
-    )
-
-    # Save the plot as an HTML file
-    fig.write_html(path + f'figures/schaefer100/surface_receptor_{receptor_names[k]}_cross_sections.html')
+# plot each receptor map
+if scale == 'scale100':
+    annot = datasets.fetch_schaefer2018('fsaverage')['100Parcels7Networks']
+    for k in range(len(receptor_names)):
+        brain = plotting.plot_fsaverage(data=receptor_data[:, k],
+                                        lhannot=annot.lh,
+                                        rhannot=annot.rh,
+                                        colormap='plasma',
+                                        views=['lat', 'med'],
+                                        data_kws={'representation': "wireframe"})
+        brain.save_image(path+'figures/schaefer100/surface_receptor_'+receptor_names[k]+'.png')
