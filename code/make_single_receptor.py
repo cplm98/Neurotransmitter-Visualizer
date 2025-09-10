@@ -139,24 +139,34 @@ print("Receptor data values:", receptor_data[:, 0])
 print("lh_tex shape:", lh_tex.shape)
 print("rh_tex shape:", rh_tex.shape)
 
+# TODO: These are NaN, the data is not being mapped properly. I need to update the mapping funtion.
 print("Left hemisphere texture values:", lh_tex)
 print("Right hemisphere texture values:", rh_tex)
 
 
-# Surface-only (clean gray cortical relief)
+# Surface with parcel values mapped (surf_map) and sulcal background
+# Note: nilearn.view_surf expects `surf_map`, not `texture`.
+# Without the min/max the resulting graphically representation looks uniform in color.
+vmin = np.nanpercentile(np.concatenate([lh_tex, rh_tex]), 2)
+vmax = np.nanpercentile(np.concatenate([lh_tex, rh_tex]), 98)
+
 view_left = nl_plotting.view_surf(
     surf_left,
-    # texture=lh_tex,
-    # bg_map=fsavg.sulc_left,
-    colorbar=False,
-    darkness=None,        # recommended; avoids over-darkening
+    surf_map=lh_tex,
+    bg_map=fsavg.sulc_left,
+    cmap=cmap_div,
+    colorbar=True,
+    darkness=None,
+    vmin=vmin, vmax=vmax,
 )
 view_right = nl_plotting.view_surf(
     surf_right,
-    # texture=rh_tex,
-    # bg_map=fsavg.sulc_right,
-    colorbar=False,
+    surf_map=rh_tex,
+    bg_map=fsavg.sulc_right,
+    cmap=cmap_div,
+    colorbar=True,
     darkness=None,
+    vmin=vmin, vmax=vmax,
 )
 
 view_left.save_as_html(os.path.join(outdir, f"03_values_left_{mesh}.html"))

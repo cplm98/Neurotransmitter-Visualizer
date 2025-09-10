@@ -119,35 +119,48 @@ def schaefer_vector_to_vertices(parcel_vals, n_rois=100, yeo_networks=7, mesh='f
             f"Non-parcel examples: LH={extras_l} RH={extras_r}"
         )
 
-    # Build code -> name maps ONLY for real parcels we kept
+    # Build robust lookup maps from labels to names. Some .annot files encode
+    # per-vertex labels as the ctab last-column "code"; others may use row indices.
+    # We support both by constructing two dicts and trying code first, then index.
     lh_codes = lh_ctab[:, -1]
     rh_codes = rh_ctab[:, -1]
 
-    def _code_to_name(ctab_codes, names):
-        m = {}
+    def _lookups(ctab_codes, names):
+        by_code = {}
+        by_index = {}
         for i, n in enumerate(names):
             s = n if isinstance(n, str) else (n.decode() if isinstance(n, (bytes, bytearray)) else str(n))
-            if "networks" in s.lower():  # only map parcel entries
-                m[ctab_codes[i]] = s
-        return m
+            if "networks" in s.lower():  # only map actual parcel rows
+                by_code[ctab_codes[i]] = s
+                by_index[i] = s
+        return by_code, by_index
 
-    code_to_name_l = _code_to_name(lh_codes, lh_names)
-    code_to_name_r = _code_to_name(rh_codes, rh_names)
+    by_code_l, by_index_l = _lookups(lh_codes, lh_names)
+    by_code_r, by_index_r = _lookups(rh_codes, rh_names)
 
     name_to_val = {name: val for name, val in zip(ordered_names, parcel_vals)}
 
     # Paint: assign each vertex the value of its parcel name (skip non-parcels)
-    def paint(labels, code_to_name):
+    def paint(labels, by_code, by_index):
         vals = np.full(labels.shape, np.nan, float)
-        for code in np.unique(labels):
-            name = code_to_name.get(code)
+        # Map unique labels in one pass for speed
+        uniq = np.unique(labels)
+        mapped_any = False
+        for lab in uniq:
+            name = by_code.get(lab)
+            if name is None and 0 <= lab < len(by_index):
+                name = by_index.get(int(lab))
             if name is None:
-                continue  # medial wall / unknown
-            vals[labels == code] = name_to_val[name]
+                continue  # medial wall / unknown / non-parcel
+            mapped_any = True
+            vals[labels == lab] = name_to_val[name]
+        if not mapped_any:
+            # Helpful warning during interactive use
+            print("[warn] No atlas labels mapped to parcels — check .annot format and mesh.")
         return vals
 
-    lh_tex = paint(lh_labels, code_to_name_l)
-    rh_tex = paint(rh_labels, code_to_name_r)
+    lh_tex = paint(lh_labels, by_code_l, by_index_l)
+    rh_tex = paint(rh_labels, by_code_r, by_index_r)
     return fsavg, lh_labels, rh_labels, lh_tex, rh_tex
 
 def save_side_by_side_iframe(left_html, right_html, out_html, title="Brain View", height="720px"):
